@@ -8,6 +8,9 @@ class SystemController:
         services_string = os.getenv("SERVICES")
         self.services = services_string.split(",") if services_string else []
         
+    async def print_all_services(self):
+        return self.services
+
     async def reboot_computer(self):
         """ Перезагружает компьютер. """
         subprocess.run(["sudo", "reboot"], check=True)

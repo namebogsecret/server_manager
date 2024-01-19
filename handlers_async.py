@@ -9,13 +9,33 @@ class Form(StatesGroup):
     stop = State()  # Остановить
     start = State()  # Запустить
 
+def is_list(obj):
+    return isinstance(obj, list)
+
+def is_dict(obj):
+    return isinstance(obj, dict)
+
+def list_to_str(my_list, controller):
+    text = ""
+    for index, item in enumerate(my_list, start=1):
+        index = controller.services.index(item) + 1
+        text += f"{index}. {item}\n"
+    return text
+
+def dict_to_str(my_dict, controller):
+    text = ""
+    for index, (key, value) in enumerate(my_dict.items(), start=1):
+        index = controller.services.index(key) + 1
+        text += f"{index}. {key}: {value}\n"
+    return text
+
 async def handle_reboot(message, controller):
     await controller.reboot_computer()
 
 async def handle_service_action(message, controller, action):
     """ Обрабатывает действия с сервисами: перезапуск, остановка и запуск. """
     try:
-        service_number = int(message.text.split(' ')[1]) + 1
+        service_number = int(message.text.split(' ')[1]) - 1
         await action(service_number)
     except (ValueError, IndexError):
         await message.answer("Неправильный номер сервиса")
@@ -47,6 +67,9 @@ async def gpt_chat(message: types.Message):
 
     async def help_message():
         return await get_help_message()
+    
+    async def print_all_services():
+        return await controller.print_all_services()
 
     commands = {
         "///перезагрузить": reboot,
@@ -56,6 +79,7 @@ async def gpt_chat(message: types.Message):
         "///свободно": check_disk_usage,
         "///работают": check_services_up,
         "///загрузка": check_cpu_load,
+        "///сервисы": print_all_services,
         "///помощь": help_message
     }
 
@@ -63,6 +87,10 @@ async def gpt_chat(message: types.Message):
     if command:
         result = await command()
         if result is not True:  # Если не было ошибки в обработке сервиса
+            if is_list(result):
+                result = list_to_str(result, controller)
+            elif is_dict(result):
+                result = dict_to_str(result, controller)
             await message.answer(result if result else "Выполнено")
     else:
         await message.answer("Я не знаю такой команды")
