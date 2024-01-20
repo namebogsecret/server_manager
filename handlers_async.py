@@ -1,62 +1,165 @@
 from aiogram import types
 from system_controller import SystemController
 from df import get_disk_usage_percent
-from aiogram.dispatcher.filters.state import State, StatesGroup
+#from aiogram.dispatcher.filters.state import State, StatesGroup
 import os
 from dotenv import load_dotenv
 from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 load_dotenv()
 users_string = os.getenv("USERS")
 ALLOWED_USERS = users_string.split(",") if users_string else []
 services_string = os.getenv("SERVICES")
 services = services_string.split(",") if services_string else []
-class BotStates(StatesGroup):
-    home = State()
-    service_management = State()
-    # Динамически создаем состояния для каждого сервиса
-    for service in services:
-        vars()[service] = State()
+# class BotStates(StatesGroup):
+#     home = State()
+#     service_management = State()
+#     # Динамически создаем состояния для каждого сервиса
+#     for service in services:
+#         vars()[service] = State()
 
 def get_main_menu_keyboard():
     keyboard = InlineKeyboardMarkup()
+    
+    #keyboard.add(InlineKeyboardButton("Статус", callback_data="status"))
+    keyboard.add(InlineKeyboardButton("Загрузка CPU", callback_data="cpu_load"))
+    keyboard.add(InlineKeyboardButton("Свободное место", callback_data="disk_usage"))
+    keyboard.add(InlineKeyboardButton("Список всех сервисов", callback_data="services"))
+    keyboard.add(InlineKeyboardButton("Сервисы работают", callback_data="services_up"))
+    keyboard.add(InlineKeyboardButton("Управление сервисами", callback_data="service_management"))
+    keyboard.add(InlineKeyboardButton("Убить телеграм", callback_data="kill_telegram"))
+    keyboard.add(InlineKeyboardButton("Получить id", callback_data="get_user_id"))
     keyboard.add(InlineKeyboardButton("Перезагрузить", callback_data="reboot"))
-    keyboard.add(InlineKeyboardButton("Статус", callback_data="status"))
     keyboard.add(InlineKeyboardButton("Помощь", callback_data="help"))
     return keyboard
 
-def get_service_management_keyboard():
+def get_service_choose_keyboard():
     keyboard = InlineKeyboardMarkup()
-    services = ["nginx", "apache", "mysql"]  # Пример списка сервисов
+    #services = ["nginx", "apache", "mysql"]  # Пример списка сервисов
     for service in services:
-        keyboard.add(InlineKeyboardButton(service, callback_data=f"service_{service}"))
+        keyboard.add(InlineKeyboardButton(service, callback_data=f"service__{service}"))
+    keyboard.add(InlineKeyboardButton("Назад", callback_data="back_to_home"))
     return keyboard
 
+def get_service_keyboard(service_name, is_running):
+    if service_name not in services:
+        return None
+    keyboard = InlineKeyboardMarkup()
+    #проверка запущен сервис или нет
+    if is_running:
+        keyboard.add(InlineKeyboardButton("Перезапустить", callback_data=f"restart__{service_name}"))
+        keyboard.add(InlineKeyboardButton("Остановить", callback_data=f"stop__{service_name}"))
+    else:
+        keyboard.add(InlineKeyboardButton("Запустить", callback_data=f"start__{service_name}"))
+    keyboard.add(InlineKeyboardButton("Информация", callback_data=f"info__{service_name}"))
+    keyboard.add(InlineKeyboardButton("Назад", callback_data="service_management"))
+    keyboard.add(InlineKeyboardButton("Домой", callback_data="back_to_home"))
+    return keyboard
 
 
 def is_list(obj):
     return isinstance(obj, list)
 
-async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
-    data = query.data
+async def start_command_handler(message: types.Message):
+    # если нужно будет удалить клавиатуру
+    # keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    # # Добавляем кнопку с текстом /start
+    # keyboard.add(types.KeyboardButton("/start"))
+    # await message.answer("Нажмите на кнопку, чтобы начать", reply_markup=keyboard)
+    #await message.answer("Клавиатура удалена.", reply_markup=types.ReplyKeyboardRemove())
+    if str(message.from_user.id) not in ALLOWED_USERS:
+        await not_allowed(message)
+        return
+    # Создание клавиатуры
+    keyboard = get_main_menu_keyboard()
+    
+    # Отправка сообщения с клавиатурой
+    await message.answer("Что делаем?", reply_markup=keyboard)
 
-    if data.startswith("service_"):
-        service_name = data.split("_")[1]
-        await state.update_data(service_name=service_name)  # Сохраняем выбранный сервис
-        await BotStates.service_management.set()  # Устанавливаем состояние управления сервисами
-        # Отправляем клавиатуру или сообщение для управления выбранным сервисом
+
+async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
+    if str(query.from_user.id) not in ALLOWED_USERS:
+        await not_allowed(query.message)
+        return
+    controller = SystemController()
+    data = query.data
+    get_main_menu_keyboard()
+    if data.startswith("service_management"):
+
+        keyboard = get_service_choose_keyboard()
+        await query.message.answer("Выбери сервис:", reply_markup=keyboard)
+    elif data.startswith("service__"):
+        service_name = data.split("__")[1]
+        if service_name in services:
+            is_running = await controller.is_service_up(service_name)
+            keyboard = get_service_keyboard(service_name, is_running)
+            await query.message.answer(f"Управление сервисом {service_name}", reply_markup=keyboard)
+
+    elif data.startswith("restart__"):
+        service_name = data.split("__")[1]
+        if service_name in services:
+            await controller.restart_service_by_name(service_name)
+            is_running = await controller.is_service_up(service_name)
+            keyboard = get_service_keyboard(service_name, is_running)
+            await query.message.answer(f"Сервис {service_name} перезапущен", reply_markup=keyboard)
+
+    elif data.startswith("stop__"):
+        service_name = data.split("__")[1]
+        if service_name in services:
+            await controller.stop_and_disable_service_by_name(service_name)
+            is_running = await controller.is_service_up(service_name)
+            keyboard = get_service_keyboard(service_name, is_running)
+            await query.message.answer(f"Сервис {service_name} остановлен", reply_markup=keyboard)
+
+    elif data.startswith("start__"):
+        service_name = data.split("__")[1]
+        if service_name in services:
+            await controller.start_and_enable_service_by_name(service_name)
+            is_running = await controller.is_service_up(service_name)
+            keyboard = get_service_keyboard(service_name, is_running)
+            await query.message.answer(f"Сервис {service_name} запущен", reply_markup=keyboard)
+
+    elif data.startswith("info__"):
+        service_name = data.split("__")[1]
+        if service_name in services:
+            is_running = await controller.is_service_up(service_name)
+            keyboard = get_service_keyboard(service_name, is_running)
+            await query.message.answer(await controller.get_service_info(service_name), reply_markup=keyboard)
     elif data == "back_to_home":
-        await BotStates.home.set()  # Возвращаемся в начальное состояние
+        keyboard = get_main_menu_keyboard()
+        await query.message.answer("Что делаем?", reply_markup=keyboard)
     elif data == "reboot":
-        # Выполнить действие "Перезагрузить"
-        pass
-    elif data == "status":
-        # Выполнить действие "Статус"
-        pass
+        await query.message.answer("Перезагрузка...", reply_markup=get_main_menu_keyboard())
+        controller.reboot_computer()
+    # elif data == "status":
+    #     pass
+    elif data == "cpu_load":
+        result = await controller.check_cpu_load_by_this_services()
+        result = dict_to_str(result, controller)
+        result = f"{await controller.total_cpu_load()}\n{dict_to_str(await controller.top_cpu(), controller)}\n{result}"
+        await query.message.answer(result, reply_markup=get_main_menu_keyboard())
+    elif data == "services_up":
+        result = await controller.check_what_services_are_up()
+        result = list_to_str(result, controller)
+        await query.message.answer(result, reply_markup=get_main_menu_keyboard())
+    elif data == "services":
+        result = await controller.print_all_services()
+        result = list_to_str(result, controller)
+        await query.message.answer(result, reply_markup=get_main_menu_keyboard())
+    elif data == "kill_telegram":
+        await query.message.answer(await controller.find_and_kill("telegram"), reply_markup=get_main_menu_keyboard())
+    elif data == "get_user_id":
+        await query.message.answer(str(query.from_user.id), reply_markup=get_main_menu_keyboard())
+    elif data == "service_management":
+        keyboard = get_service_choose_keyboard()
+        await query.message.answer("Выберите сервис", reply_markup=keyboard)
+    elif data == "disk_usage":
+        await query.message.answer(await get_disk_usage_percent(), reply_markup=get_main_menu_keyboard())
     elif data == "help":
-        # Показать сообщение помощи
-        pass
+        #query.message.answer("Вызвана помощь")
+        await query.message.answer(await get_help_message(), reply_markup=get_main_menu_keyboard())
 
     await query.answer()
 
@@ -177,6 +280,15 @@ async def get_help_message():
             "///загрузка - уровень загрузки каждым сервисом\n" +
             "///помощь - вывести это сообщение")
 
+async def get_help_message_str():
+    return str("///перезагрузить - перезагрузить компьютер\n" +
+            "///перезагрузить [номер] - перезагрузить сервис по номеру\n" +
+            "///остановить [номер] - остановить сервис по номеру\n" +
+            "///запустить [номер] - запустить сервис по номеру\n" +
+            "///работают - напечатать работающие сервисы\n" +
+            "///свободно - свободно места на диске\n" +
+            "///загрузка - уровень загрузки каждым сервисом\n" +
+            "///помощь - вывести это сообщение")
 async def not_allowed(message: types.Message):
     with open("/root/myservermanager/not_allowed.txt", "a") as f:
         f.write(f"{message.from_user.id}: {message.text}\n")

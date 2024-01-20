@@ -16,6 +16,13 @@ class SystemController:
         """ Перезагружает компьютер. """
         subprocess.run(["sudo", "reboot"], check=True)
 
+    async def restart_service_by_name(self, service_name):
+        """
+        Перезагружает один из трех сервисов.
+        :param service_name: Название сервиса.
+        """
+        subprocess.run(["sudo", "systemctl", "restart", service_name], check=True)
+
     async def restart_service(self, service_number):
         """
         Перезагружает один из трех сервисов.
@@ -23,10 +30,18 @@ class SystemController:
         """
         if service_number in range(len(self.services)):
             service_name = self.services[service_number]
-            subprocess.run(["sudo", "systemctl", "restart", service_name], check=True)
+            await self.restart_service_by_name(service_name)
         else:
             raise ValueError("Неправильный номер сервиса")
         
+    async def stop_and_disable_service_by_name(self, service_name):
+        """
+        Останавливает и отключает один из трех сервисов.
+        :param service_name: Название сервиса.
+        """
+        subprocess.run(["sudo", "systemctl", "stop", service_name], check=True)
+        subprocess.run(["sudo", "systemctl", "disable", service_name], check=True)
+
     async def stop_and_disable_service(self, service_number):
         """
         Останавливает и отключает один из трех сервисов.
@@ -34,11 +49,18 @@ class SystemController:
         """
         if service_number in range(len(self.services)):
             service_name = self.services[service_number]
-            subprocess.run(["sudo", "systemctl", "stop", service_name], check=True)
-            subprocess.run(["sudo", "systemctl", "disable", service_name], check=True)
+            await self.stop_and_disable_service_by_name(service_name)
         else:
             raise ValueError("Неправильный номер сервиса")
         
+    async def start_and_enable_service_by_name(self, service_name):
+        """
+        Запускает и включает один из трех сервисов.
+        :param service_name: Название сервиса.
+        """
+        subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
+        subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
+
     async def start_and_enable_service(self, service_number):
         """
         Запускает и включает один из трех сервисов.
@@ -46,19 +68,39 @@ class SystemController:
         """
         if service_number in range(len(self.services)):
             service_name = self.services[service_number]
-            subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
-            subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
+            await self.start_and_enable_service_by_name(service_name)
         else:
             raise ValueError("Неправильный номер сервиса")
+
+    async def is_service_up(self, service_name):
+        """
+        Проверяет, запущен ли сервис.
+        :param service_name: Название сервиса.
+        """
+        try:
+            subprocess.run(["sudo", "systemctl", "is-active", service_name], check=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+    async def get_service_info(self, service_name):
+        """
+        Возвращает информацию о сервисе.
+        :param service_name: Название сервиса.
+        """
+        try:
+            output = subprocess.check_output(
+                ["systemctl", "show", service_name], text=True
+            )
+            return output.strip()[:100]
+        except subprocess.CalledProcessError:
+            return "Сервис не найден"
 
     async def check_what_services_are_up(self):
         up_services = []
         for service in self.services:
-            try:
-                subprocess.run(["sudo", "systemctl", "is-active", service], check=True)
+            if await self.is_service_up(service):
                 up_services.append(service)
-            except subprocess.CalledProcessError:
-                pass
         return up_services
 
     async def find_and_kill(self, pattern):
@@ -73,7 +115,7 @@ class SystemController:
                     # Убиваем каждый процесс по PID
                     subprocess.run(['kill', pid])
                     killed +=1
-            return str(killed-1)
+            return str(killed)
         except Exception as e:
             return f"Ошибка: {e} Killed {killed}"
 

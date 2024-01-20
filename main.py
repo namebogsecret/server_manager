@@ -9,7 +9,7 @@ else:
 sys.path.append(src_path)
 import asyncio
 import nest_asyncio
-from handlers_async import  gpt_chat, voice_to_text, BotStates, callback_query_handler, service_management_handler
+from handlers_async import  gpt_chat, voice_to_text, callback_query_handler, service_management_handler, start_command_handler
 
 from aiogram import Bot, Dispatcher #, types
 
@@ -35,10 +35,14 @@ async def my_telegram_bot() -> None:
     bot = Bot(token=api)
     dp = Dispatcher(bot)
 
+    # Регистрация обработчика команды /start
+    dp.register_message_handler(start_command_handler, commands=["start"])
+
+
     # Register your async handlers here, for example:
     dp.register_message_handler(gpt_chat, content_types=['text'])
     dp.register_message_handler(voice_to_text, content_types=['voice'])
-    #dp.register_callback_query_handler(callback_query_handler, state='*')
+    dp.register_callback_query_handler(callback_query_handler)
     #dp.register_message_handler(service_management_handler, state=BotStates.service_management)
 
     
