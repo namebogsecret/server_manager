@@ -15,17 +15,19 @@ def is_list(obj):
 def is_dict(obj):
     return isinstance(obj, dict)
 
-def list_to_str(my_list, controller):
+def list_to_str(my_list, controller, true_index = False):
     text = ""
     for index, item in enumerate(my_list, start=1):
-        index = controller.services.index(item) + 1
+        if true_index:
+            index = controller.services.index(item) + 1
         text += f"{index}. {item}\n"
     return text
 
-def dict_to_str(my_dict, controller):
+def dict_to_str(my_dict, controller, true_index = False):
     text = ""
     for index, (key, value) in enumerate(my_dict.items(), start=1):
-        index = controller.services.index(key) + 1
+        if true_index:
+            index = controller.services.index(key) + 1
         text += f"{index}. {key}: {value}\n"
     return text
 
@@ -71,6 +73,9 @@ async def gpt_chat(message: types.Message):
     async def print_all_services():
         return await controller.print_all_services()
 
+    async def kill_telegram():
+        return await controller.find_and_kill("telegram")
+
     commands = {
         "///перезагрузить": reboot,
         "///перезапустить": restart_service,
@@ -80,6 +85,7 @@ async def gpt_chat(message: types.Message):
         "///работают": check_services_up,
         "///загрузка": check_cpu_load,
         "///сервисы": print_all_services,
+        "///убить": kill_telegram,
         "///помощь": help_message
     }
 
@@ -88,9 +94,10 @@ async def gpt_chat(message: types.Message):
         result = await command()
         if result is not True:  # Если не было ошибки в обработке сервиса
             if is_list(result):
-                result = list_to_str(result, controller)
+                result = list_to_str(result, controller, True)
             elif is_dict(result):
-                result = dict_to_str(result, controller)
+                result = dict_to_str(result, controller, True)
+                result = f"{await controller.total_cpu_load()}\n{dict_to_str(await controller.top_cpu(), controller)}\n{result}"
             await message.answer(result if result else "Выполнено")
     else:
         await message.answer("Я не знаю такой команды")

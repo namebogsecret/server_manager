@@ -1,6 +1,7 @@
 import subprocess
 import os
 from dotenv import load_dotenv
+import psutil
 
 class SystemController:
     def __init__(self):
@@ -60,9 +61,46 @@ class SystemController:
                 pass
         return up_services
 
+    async def find_and_kill(self, pattern):
+        killed = 0
+        try:
+            # Находим процессы, соответствующие шаблону
+            result = subprocess.run(['pgrep', '-f', pattern], stdout=subprocess.PIPE, text=True)
+            pids = result.stdout.strip().split('\n')
+
+            for pid in pids:
+                if pid:
+                    # Убиваем каждый процесс по PID
+                    subprocess.run(['kill', pid])
+                    killed +=1
+            return str(killed-1)
+        except Exception as e:
+            return f"Ошибка: {e} Killed {killed}"
+
+    async def total_cpu_load(self):
+        return psutil.cpu_percent(interval=1, percpu=True)
+        #return psutil.cpu_percent(interval=5)
+
+    async def top_cpu(self, n=5):
+        # Запускаем команду и получаем вывод
+        result = subprocess.run(['ps', '-eo', 'comm,%cpu', '--sort=-%cpu'], stdout=subprocess.PIPE, text=True)
+        # Разбиваем вывод на строки и игнорируем первую (заголовок)
+        lines = result.stdout.strip().split('\n')[1:]
+        # Получаем первые n строк и создаем словарь
+        process_cpu_dict = {}
+        for line in lines[:n]:
+            parts = line.split()
+            process_name = ' '.join(parts[:-1])  # Название процесса может содержать пробелы
+            cpu_load = parts[-1]  # Загрузка ЦПУ
+            process_cpu_dict[process_name] = cpu_load
+
+        return process_cpu_dict
+
     async def check_cpu_load_by_this_services(self):
         services_are_up = await self.check_what_services_are_up()
         cpu_load_by_service = {}
+        #global cpu load
+
         for service in services_are_up:
             try:
                 # # Получение PID'ов процессов, связанных с сервисом
