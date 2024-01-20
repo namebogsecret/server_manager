@@ -2,15 +2,72 @@ from aiogram import types
 from system_controller import SystemController
 from df import get_disk_usage_percent
 from aiogram.dispatcher.filters.state import State, StatesGroup
+import os
+from dotenv import load_dotenv
+from aiogram.dispatcher import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-class Form(StatesGroup):
-    home = State()  # Домашнее состояние
-    restart = State()  # Перезапустить
-    stop = State()  # Остановить
-    start = State()  # Запустить
+load_dotenv()
+users_string = os.getenv("USERS")
+ALLOWED_USERS = users_string.split(",") if users_string else []
+services_string = os.getenv("SERVICES")
+services = services_string.split(",") if services_string else []
+class BotStates(StatesGroup):
+    home = State()
+    service_management = State()
+    # Динамически создаем состояния для каждого сервиса
+    for service in services:
+        vars()[service] = State()
+
+def get_main_menu_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("Перезагрузить", callback_data="reboot"))
+    keyboard.add(InlineKeyboardButton("Статус", callback_data="status"))
+    keyboard.add(InlineKeyboardButton("Помощь", callback_data="help"))
+    return keyboard
+
+def get_service_management_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    services = ["nginx", "apache", "mysql"]  # Пример списка сервисов
+    for service in services:
+        keyboard.add(InlineKeyboardButton(service, callback_data=f"service_{service}"))
+    return keyboard
+
+
 
 def is_list(obj):
     return isinstance(obj, list)
+
+async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
+    data = query.data
+
+    if data.startswith("service_"):
+        service_name = data.split("_")[1]
+        await state.update_data(service_name=service_name)  # Сохраняем выбранный сервис
+        await BotStates.service_management.set()  # Устанавливаем состояние управления сервисами
+        # Отправляем клавиатуру или сообщение для управления выбранным сервисом
+    elif data == "back_to_home":
+        await BotStates.home.set()  # Возвращаемся в начальное состояние
+    elif data == "reboot":
+        # Выполнить действие "Перезагрузить"
+        pass
+    elif data == "status":
+        # Выполнить действие "Статус"
+        pass
+    elif data == "help":
+        # Показать сообщение помощи
+        pass
+
+    await query.answer()
+
+async def service_management_handler(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    service_name = user_data.get("service_name")
+    if service_name:
+        # Отправляем сообщение или клавиатуру для управления сервисом
+        # Например, "Управление сервисом: {service_name}"
+        pass
+
 
 def is_dict(obj):
     return isinstance(obj, dict)
@@ -44,6 +101,9 @@ async def handle_service_action(message, controller, action):
         return True  # Возвращаем True, чтобы указать на ошибку
 
 async def gpt_chat(message: types.Message):
+    if str(message.from_user.id) not in ALLOWED_USERS:
+        await not_allowed(message)
+        return
     controller = SystemController()
 
     async def reboot():
@@ -75,6 +135,9 @@ async def gpt_chat(message: types.Message):
 
     async def kill_telegram():
         return await controller.find_and_kill("telegram")
+    
+    async def get_id():
+        return str(message.from_user.id)
 
     commands = {
         "///перезагрузить": reboot,
@@ -86,6 +149,7 @@ async def gpt_chat(message: types.Message):
         "///загрузка": check_cpu_load,
         "///сервисы": print_all_services,
         "///убить": kill_telegram,
+        "///get_user_id": get_id,
         "///помощь": help_message
     }
 
@@ -113,6 +177,13 @@ async def get_help_message():
             "///загрузка - уровень загрузки каждым сервисом\n" +
             "///помощь - вывести это сообщение")
 
+async def not_allowed(message: types.Message):
+    with open("/root/myservermanager/not_allowed.txt", "a") as f:
+        f.write(f"{message.from_user.id}: {message.text}\n")
+    await message.answer(f"Вы не имеете доступа к этому боту")
 
 async def voice_to_text(message: types.Message):
+    if message.from_user.id not in ALLOWED_USERS:
+        await not_allowed(message)
+        return
     await message.answer("Пока не реализовано")
