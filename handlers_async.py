@@ -85,12 +85,13 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         return
     controller = SystemController()
     data = query.data
-    get_main_menu_keyboard()
+    #get_main_menu_keyboard()
     if data.startswith("service_management"):
-
+        await query.message.edit_reply_markup(reply_markup=None)
         keyboard = get_service_choose_keyboard()
         await query.message.answer("Выбери сервис:", reply_markup=keyboard)
     elif data.startswith("service__"):
+        await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
         if service_name in services:
             is_running = await controller.is_service_up(service_name)
@@ -98,6 +99,7 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
             await query.message.answer(f"Управление сервисом {service_name}", reply_markup=keyboard)
 
     elif data.startswith("restart__"):
+        await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
         if service_name in services:
             await controller.restart_service_by_name(service_name)
@@ -106,6 +108,7 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
             await query.message.answer(f"Сервис {service_name} перезапущен", reply_markup=keyboard)
 
     elif data.startswith("stop__"):
+        await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
         if service_name in services:
             await controller.stop_and_disable_service_by_name(service_name)
@@ -114,6 +117,7 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
             await query.message.answer(f"Сервис {service_name} остановлен", reply_markup=keyboard)
 
     elif data.startswith("start__"):
+        await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
         if service_name in services:
             await controller.start_and_enable_service_by_name(service_name)
@@ -122,44 +126,55 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
             await query.message.answer(f"Сервис {service_name} запущен", reply_markup=keyboard)
 
     elif data.startswith("info__"):
+        await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
         if service_name in services:
             is_running = await controller.is_service_up(service_name)
             keyboard = get_service_keyboard(service_name, is_running)
             await query.message.answer(await controller.get_service_info(service_name), reply_markup=keyboard)
     elif data == "back_to_home":
+        await query.message.edit_reply_markup(reply_markup=None)
         keyboard = get_main_menu_keyboard()
         await query.message.answer("Что делаем?", reply_markup=keyboard)
     elif data == "reboot":
+        await query.message.edit_reply_markup(reply_markup=None)
         await query.message.answer("Перезагрузка...", reply_markup=get_main_menu_keyboard())
         controller.reboot_computer()
     # elif data == "status":
     #     pass
     elif data == "cpu_load":
+        await query.message.edit_reply_markup(reply_markup=None)
         result = await controller.check_cpu_load_by_this_services()
         result = dict_to_str(result, controller)
-        result = f"{await controller.total_cpu_load()}\n{dict_to_str(await controller.top_cpu(), controller)}\n{result}"
+        result = f"Загрузка CPU:\n{await controller.total_cpu_load()}\n{dict_to_str(await controller.top_cpu(), controller)}\n{result}"
         await query.message.answer(result, reply_markup=get_main_menu_keyboard())
     elif data == "services_up":
+        await query.message.edit_reply_markup(reply_markup=None)
         result = await controller.check_what_services_are_up()
         result = list_to_str(result, controller)
-        await query.message.answer(result, reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"Запущенные сервисы:\n{result}", reply_markup=get_main_menu_keyboard())
     elif data == "services":
+        await query.message.edit_reply_markup(reply_markup=None)
         result = await controller.print_all_services()
         result = list_to_str(result, controller)
-        await query.message.answer(result, reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"Список всех сервисов:\n{result}", reply_markup=get_main_menu_keyboard())
     elif data == "kill_telegram":
-        await query.message.answer(await controller.find_and_kill("telegram"), reply_markup=get_main_menu_keyboard())
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.answer(f"Убито процессов телеграм:\n{await controller.find_and_kill('telegram')}", reply_markup=get_main_menu_keyboard())
     elif data == "get_user_id":
-        await query.message.answer(str(query.from_user.id), reply_markup=get_main_menu_keyboard())
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.answer(f"Curent User_id: {str(query.from_user.id)}", reply_markup=get_main_menu_keyboard())
     elif data == "service_management":
+        await query.message.edit_reply_markup(reply_markup=None)
         keyboard = get_service_choose_keyboard()
         await query.message.answer("Выберите сервис", reply_markup=keyboard)
     elif data == "disk_usage":
-        await query.message.answer(await get_disk_usage_percent(), reply_markup=get_main_menu_keyboard())
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.answer(f"На диске свободно: {100-int(await get_disk_usage_percent())} %", reply_markup=get_main_menu_keyboard())
     elif data == "help":
+        await query.message.edit_reply_markup(reply_markup=None)
         #query.message.answer("Вызвана помощь")
-        await query.message.answer(await get_help_message(), reply_markup=get_main_menu_keyboard())
+        await query.message.answer(await get_help_message_inline(), reply_markup=get_main_menu_keyboard())
 
     await query.answer()
 
@@ -280,15 +295,22 @@ async def get_help_message():
             "///загрузка - уровень загрузки каждым сервисом\n" +
             "///помощь - вывести это сообщение")
 
-async def get_help_message_str():
-    return str("///перезагрузить - перезагрузить компьютер\n" +
-            "///перезагрузить [номер] - перезагрузить сервис по номеру\n" +
-            "///остановить [номер] - остановить сервис по номеру\n" +
-            "///запустить [номер] - запустить сервис по номеру\n" +
-            "///работают - напечатать работающие сервисы\n" +
-            "///свободно - свободно места на диске\n" +
-            "///загрузка - уровень загрузки каждым сервисом\n" +
-            "///помощь - вывести это сообщение")
+async def get_help_message_inline():
+    return ("Этот бот умеет:\n" +
+            "1. Проверять загрузку CPU\n" +
+            "2. Проверять свободное место на диске\n" +
+            "3. Показывать список всех сервисов\n" +
+            "4. Показывать список работающих сервисов\n" +
+            "5. Управлять сервисами:\n" +
+            "   5.1. Перезапускать сервис\n" +
+            "   5.2. Останавливать сервис\n" +
+            "   5.3. Запускать сервис\n" +
+            "   5.4. Показывает информацию о сервисе\n" +
+            "6. Убивать процессы связанные с телеграм\n" +
+            "7. Показывать id пользователя\n" +
+            "8. Перезагружать компьютер\n" +
+            "9. Показывать это сообщение\n"    
+    )
 async def not_allowed(message: types.Message):
     with open("/root/myservermanager/not_allowed.txt", "a") as f:
         f.write(f"{message.from_user.id}: {message.text}\n")
