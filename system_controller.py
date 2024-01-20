@@ -92,7 +92,7 @@ class SystemController:
             output = subprocess.check_output(
                 ["systemctl", "show", service_name], text=True
             )
-            return output.strip()[:100]
+            return f"Информация о сервисе {service_name}:\n{output.strip()[:400]}"
         except subprocess.CalledProcessError:
             return "Сервис не найден"
 
