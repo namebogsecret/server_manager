@@ -160,7 +160,7 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         await query.message.answer(f"Список всех сервисов:\n{result}", reply_markup=get_main_menu_keyboard())
     elif data == "kill_telegram":
         await query.message.edit_reply_markup(reply_markup=None)
-        await query.message.answer(f"Убито процессов телеграм:\n{await controller.find_and_kill('telegram')}", reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"Убито процессов телеграм: {await controller.find_and_kill('telegram')}", reply_markup=get_main_menu_keyboard())
     elif data == "get_user_id":
         await query.message.edit_reply_markup(reply_markup=None)
         await query.message.answer(f"Curent User_id: {str(query.from_user.id)}", reply_markup=get_main_menu_keyboard())
