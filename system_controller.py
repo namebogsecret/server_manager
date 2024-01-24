@@ -2,6 +2,7 @@ import subprocess
 import os
 from dotenv import load_dotenv
 import psutil
+import re
 
 class SystemController:
     def __init__(self):
@@ -138,6 +139,31 @@ class SystemController:
 
         return process_cpu_dict
 
+    async def check_memory_usage(self):
+        #free -h
+        output = subprocess.check_output(
+            ["free", "-h"], text=True
+        )
+        return output
+
+    async def top_mem_processes(self, n=10):
+        # Выполнение команды ps и получение вывода
+        output = subprocess.check_output(
+            ["ps", "aux", "--sort=-%mem"], text=True
+        )
+        lines = output.strip().split('\n')[1:]  # Пропускаем первую строку (заголовки)
+        process_mem_dict = {}
+        lines = lines[:n]
+        for line in lines:
+            # Разделяем строку с помощью регулярного выражения
+            parts = re.split(r'\s+', line, maxsplit=10)
+            # Получаем первые 20 символов названия процесса
+            process_name = parts[-1][:20] + parts[-1][-10:]
+            mem_usage = parts[3]
+            process_mem_dict[process_name] = mem_usage
+
+        return process_mem_dict
+    
     async def check_cpu_load_by_this_services(self):
         services_are_up = await self.check_what_services_are_up()
         cpu_load_by_service = {}
@@ -179,6 +205,47 @@ class SystemController:
             
 
         return cpu_load_by_service
+    
+    async def _get_current_crontab(self):
+        """ Получает текущий crontab пользователя """
+        try:
+            return subprocess.check_output(['crontab', '-l'], stderr=subprocess.STDOUT).decode()
+        except subprocess.CalledProcessError:
+            # Возвращает пустую строку, если у пользователя нет задач в crontab
+            return ""
+
+    async def list_cron_jobs(self):
+        current_crontab = await self._get_current_crontab()
+        lines = current_crontab.splitlines()
+        dict_cron_jobs = {}
+        for line in lines:
+            if line.strip():
+                active = False if line.strip().startswith("#") else True
+                command_part = line.strip().split()[-1].split('/')[-1]
+                #print(f"{status}: {command_part}")
+                dict_cron_jobs[command_part] = active
+        return dict_cron_jobs
+
+    async def _write_new_crontab(self, new_crontab):
+        """ Записывает новый crontab """
+        process = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process.communicate(new_crontab.encode())
+
+    async def modify_cron_line(self, service_name):
+        current_crontab = await self._get_current_crontab()
+        lines = current_crontab.splitlines()
+        modified_lines = []
+
+        for line in lines:
+            if re.search(r'\b' + re.escape(service_name) + r'\b', line):
+                if not line.strip().startswith("#"):
+                    line = "#" + line
+                elif line.strip().startswith("#"):
+                    line = line[1:]
+            modified_lines.append(line)
+
+        await self._write_new_crontab('\n'.join(modified_lines)+"\n")
+
 # Пример использования:
 #controller = SystemController()
 # controller.reboot_computer()  # Раскомментируйте для перезагрузки компьютера

@@ -21,41 +21,125 @@ services = services_string.split(",") if services_string else []
 #         vars()[service] = State()
 
 def get_main_menu_keyboard():
-    keyboard = InlineKeyboardMarkup()
-    
-    #keyboard.add(InlineKeyboardButton("Статус", callback_data="status"))
-    keyboard.add(InlineKeyboardButton("Загрузка CPU", callback_data="cpu_load"))
-    keyboard.add(InlineKeyboardButton("Свободное место", callback_data="disk_usage"))
-    keyboard.add(InlineKeyboardButton("Список всех сервисов", callback_data="services"))
-    keyboard.add(InlineKeyboardButton("Сервисы работают", callback_data="services_up"))
-    keyboard.add(InlineKeyboardButton("Управление сервисами", callback_data="service_management"))
-    keyboard.add(InlineKeyboardButton("Убить телеграм", callback_data="kill_telegram"))
-    keyboard.add(InlineKeyboardButton("Получить id", callback_data="get_user_id"))
-    keyboard.add(InlineKeyboardButton("Перезагрузить", callback_data="reboot"))
-    keyboard.add(InlineKeyboardButton("Помощь", callback_data="help"))
+    keyboard = InlineKeyboardMarkup(row_width=2)  # Задаем ширину ряда равной 2
+
+    buttons = [
+        InlineKeyboardButton("Статистика", callback_data="statistica"),
+        InlineKeyboardButton("Управление сервисами", callback_data="service_management"),
+        InlineKeyboardButton("Убить процессы", callback_data="kill"),
+        InlineKeyboardButton("Crone", callback_data="crone"),
+        InlineKeyboardButton("Помощь", callback_data="help")
+    ]
+
+    keyboard.add(*buttons)  # Добавляем кнопки в клавиатуру
+    return keyboard
+
+def crone_keyboard(cron_jobs):
+    keyboard = InlineKeyboardMarkup(row_width=2)  # Задаем ширину ряда равной 2
+    # buttons= [
+    # for index, kej, status in enumerate(cron_jobs, start=1):
+
+    #     InlineKeyboardButton(f"{index}. {kej} - {status}", callback_data=f"crone__{kej}")
+        
+    # ]
+    buttons = []
+    for kej, active in cron_jobs.items():
+        status = "✅" if active else "❌"
+        buttons.append(InlineKeyboardButton(f"{status} {kej}", callback_data=f"crone-{kej}"))
+    keyboard.add(*buttons)
+    keyboard.row(
+        InlineKeyboardButton("Назад", callback_data="back_to_home")
+    )
+
+    #keyboard.add(*buttons)  # Добавляем кнопки в клавиатуру
+    return keyboard
+
+def statistica_keyboard():
+    keyboard = InlineKeyboardMarkup(row_width=2)  # Задаем ширину ряда равной 2
+
+    buttons = [
+        InlineKeyboardButton("Загрузка CPU", callback_data="cpu_load"),
+        InlineKeyboardButton("Загрузка памяти", callback_data="mem_usage"),
+        InlineKeyboardButton("Свободное место", callback_data="disk_usage"),
+        InlineKeyboardButton("Получить id", callback_data="get_user_id"),
+        InlineKeyboardButton("Назад", callback_data="back_to_home")
+    ]
+
+    keyboard.add(*buttons)  # Добавляем кнопки в клавиатуру
+    return keyboard
+
+def killing_processes_keyboard():
+    keyboard = InlineKeyboardMarkup(row_width=2)  # Задаем ширину ряда равной 2
+
+    buttons = [
+        InlineKeyboardButton("Убить телеграм", callback_data="kill_telegram"),
+        InlineKeyboardButton("Убить vscode", callback_data="kill_vscode"),
+        InlineKeyboardButton("Перезагрузить", callback_data="reboot"),
+        InlineKeyboardButton("Назад", callback_data="back_to_home")
+    ]
+
+    keyboard.add(*buttons)  # Добавляем кнопки в клавиатуру
     return keyboard
 
 def get_service_choose_keyboard():
-    keyboard = InlineKeyboardMarkup()
-    #services = ["nginx", "apache", "mysql"]  # Пример списка сервисов
-    for service in services:
-        keyboard.add(InlineKeyboardButton(service, callback_data=f"service__{service}"))
-    keyboard.add(InlineKeyboardButton("Назад", callback_data="back_to_home"))
+
+    keyboard = InlineKeyboardMarkup(row_width=2)  # Устанавливаем ширину ряда равной 2
+    keyboard.row(
+        #InlineKeyboardButton("Список всех сервисов", callback_data="services"),
+        InlineKeyboardButton("Запущенные сервисы", callback_data="services_up")
+    )
+    # Добавляем кнопки для сервисов парами
+    for i in range(0, len(services), 2):
+        if i + 1 < len(services):
+            # Если есть следующий элемент, добавляем две кнопки в ряд
+            keyboard.row(
+                InlineKeyboardButton(f"{i+1}. {services[i]}", callback_data=f"service__{services[i]}"),
+                InlineKeyboardButton(f"{i+2}. {services[i + 1]}", callback_data=f"service__{services[i + 1]}")
+            )
+        else:
+            # Если это последний элемент и он один, добавляем одну кнопку в ряд
+            keyboard.row(
+                InlineKeyboardButton(f"{i+1}. {services[i]}", callback_data=f"service__{services[i]}")
+            )
+
+    # Добавляем кнопку "Назад" в отдельный ряд
+    keyboard.row(
+        InlineKeyboardButton("Назад", callback_data="back_to_home")
+    )
+
     return keyboard
 
 def get_service_keyboard(service_name, is_running):
     if service_name not in services:
         return None
-    keyboard = InlineKeyboardMarkup()
-    #проверка запущен сервис или нет
+
+    keyboard = InlineKeyboardMarkup(row_width=2)  # Устанавливаем ширину ряда равной 2
+
+    # Проверка, запущен ли сервис
     if is_running:
-        keyboard.add(InlineKeyboardButton("Перезапустить", callback_data=f"restart__{service_name}"))
-        keyboard.add(InlineKeyboardButton("Остановить", callback_data=f"stop__{service_name}"))
+        if service_name == "my_server_manager":
+            keyboard.row(
+                InlineKeyboardButton("Перезапустить", callback_data=f"restart__{service_name}")
+            )
+        else:
+            keyboard.row(
+                InlineKeyboardButton("Перезапустить", callback_data=f"restart__{service_name}"),
+                InlineKeyboardButton("Остановить", callback_data=f"stop__{service_name}")
+            )
     else:
-        keyboard.add(InlineKeyboardButton("Запустить", callback_data=f"start__{service_name}"))
-    keyboard.add(InlineKeyboardButton("Информация", callback_data=f"info__{service_name}"))
-    keyboard.add(InlineKeyboardButton("Назад", callback_data="service_management"))
-    keyboard.add(InlineKeyboardButton("Домой", callback_data="back_to_home"))
+        keyboard.row(
+            InlineKeyboardButton("Запустить", callback_data=f"start__{service_name}")
+        )
+
+    keyboard.row(
+        InlineKeyboardButton("Информация", callback_data=f"info__{service_name}"),
+        InlineKeyboardButton("Назад", callback_data="service_management")
+    )
+
+    keyboard.row(
+        InlineKeyboardButton("Домой", callback_data="back_to_home")
+    )
+
     return keyboard
 
 
@@ -102,6 +186,10 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
         if service_name in services:
+            if service_name == "my_server_manager":
+                await query.message.answer(f"Перезагружаю", reply_markup=get_main_menu_keyboard())
+                await controller.restart_service_by_name(service_name)
+                return
             await controller.restart_service_by_name(service_name)
             is_running = await controller.is_service_up(service_name)
             keyboard = get_service_keyboard(service_name, is_running)
@@ -142,17 +230,53 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         controller.reboot_computer()
     # elif data == "status":
     #     pass
+
+    elif data == "kill":
+        await query.message.edit_reply_markup(reply_markup=None)
+        keyboard = killing_processes_keyboard()
+        await query.message.answer("Что убиваем?", reply_markup=keyboard)
+
+    elif data == "statistica":
+        await query.message.edit_reply_markup(reply_markup=None)
+        keyboard = statistica_keyboard()
+        await query.message.answer("Что смотрим?", reply_markup=keyboard)
+    
+    elif data == "mem_usage":
+        await query.message.edit_reply_markup(reply_markup=None)
+        top_mem = await controller.top_mem_processes()
+        top_mem = dict_to_str(top_mem, controller)
+        result = await controller.check_memory_usage()
+
+        await query.message.answer(f"Загрузка памяти:\n{result}\n{top_mem}", reply_markup=statistica_keyboard())
+
+    elif data == "crone":
+        await query.message.edit_reply_markup(reply_markup=None)
+        cron_jobs = await controller.list_cron_jobs()
+        keyboard = crone_keyboard(cron_jobs)
+        await query.message.answer("Cron. Нажмите что бы включить/выключить", reply_markup=keyboard)
+
+    elif data.startswith("crone-"):
+        await query.message.edit_reply_markup(reply_markup=None)
+        cron_job = data.split("-")[1]
+        await controller.modify_cron_line(cron_job)
+        cron_jobs = await controller.list_cron_jobs()
+        keyboard = crone_keyboard(cron_jobs)
+        await query.message.answer("Cron. Нажмите что бы включить/выключить", reply_markup=keyboard)
+
+    elif data == "kill_vscode":
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.answer(f"Убито процессов vscode: {await controller.find_and_kill('vscode')}", reply_markup=killing_processes_keyboard())
     elif data == "cpu_load":
         await query.message.edit_reply_markup(reply_markup=None)
         result = await controller.check_cpu_load_by_this_services()
         result = dict_to_str(result, controller)
         result = f"Загрузка CPU:\n{await controller.total_cpu_load()}\n{dict_to_str(await controller.top_cpu(), controller)}\n{result}"
-        await query.message.answer(result, reply_markup=get_main_menu_keyboard())
+        await query.message.answer(result, reply_markup=statistica_keyboard())
     elif data == "services_up":
         await query.message.edit_reply_markup(reply_markup=None)
         result = await controller.check_what_services_are_up()
         result = list_to_str(result, controller)
-        await query.message.answer(f"Запущенные сервисы:\n{result}", reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"Запущенные сервисы:\n{result}", reply_markup=get_service_choose_keyboard())
     elif data == "services":
         await query.message.edit_reply_markup(reply_markup=None)
         result = await controller.print_all_services()
@@ -160,17 +284,17 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         await query.message.answer(f"Список всех сервисов:\n{result}", reply_markup=get_main_menu_keyboard())
     elif data == "kill_telegram":
         await query.message.edit_reply_markup(reply_markup=None)
-        await query.message.answer(f"Убито процессов телеграм: {await controller.find_and_kill('telegram')}", reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"Убито процессов телеграм: {await controller.find_and_kill('telegram')}", reply_markup=killing_processes_keyboard())
     elif data == "get_user_id":
         await query.message.edit_reply_markup(reply_markup=None)
-        await query.message.answer(f"Curent User_id: {str(query.from_user.id)}", reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"Curent User_id: {str(query.from_user.id)}", reply_markup=statistica_keyboard())
     elif data == "service_management":
         await query.message.edit_reply_markup(reply_markup=None)
         keyboard = get_service_choose_keyboard()
         await query.message.answer("Выберите сервис", reply_markup=keyboard)
     elif data == "disk_usage":
         await query.message.edit_reply_markup(reply_markup=None)
-        await query.message.answer(f"На диске свободно: {100-int(await get_disk_usage_percent())} %", reply_markup=get_main_menu_keyboard())
+        await query.message.answer(f"На диске свободно: {100-int(await get_disk_usage_percent())} %", reply_markup=statistica_keyboard())
     elif data == "help":
         await query.message.edit_reply_markup(reply_markup=None)
         #query.message.answer("Вызвана помощь")
