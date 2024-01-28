@@ -124,7 +124,7 @@ class SystemController:
         return psutil.cpu_percent(interval=1, percpu=True)
         #return psutil.cpu_percent(interval=5)
 
-    async def top_cpu(self, n=5):
+    async def top_cpu(self, n=50):
         # Запускаем команду и получаем вывод
         result = subprocess.run(['ps', '-eo', 'comm,%cpu', '--sort=-%cpu'], stdout=subprocess.PIPE, text=True)
         # Разбиваем вывод на строки и игнорируем первую (заголовок)
@@ -146,7 +146,7 @@ class SystemController:
         )
         return output
 
-    async def top_mem_processes(self, n=10):
+    async def top_mem_processes(self, n=50):
         # Выполнение команды ps и получение вывода
         output = subprocess.check_output(
             ["ps", "aux", "--sort=-%mem"], text=True
@@ -158,7 +158,7 @@ class SystemController:
             # Разделяем строку с помощью регулярного выражения
             parts = re.split(r'\s+', line, maxsplit=10)
             # Получаем первые 20 символов названия процесса
-            process_name = parts[-1][:20] + parts[-1][-10:]
+            process_name = parts[-1][:14] + "|" + parts[-1][-15:]
             mem_usage = parts[3]
             process_mem_dict[process_name] = mem_usage
 
@@ -246,6 +246,13 @@ class SystemController:
 
         await self._write_new_crontab('\n'.join(modified_lines)+"\n")
 
+    async def run_command(self, command):
+        """ Запускает команду в терминале """
+        try:
+            output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode()
+            return output
+        except subprocess.CalledProcessError as e:
+            return e.output.decode()
 # Пример использования:
 #controller = SystemController()
 # controller.reboot_computer()  # Раскомментируйте для перезагрузки компьютера

@@ -380,6 +380,24 @@ async def gpt_chat(message: types.Message):
     
     async def get_id():
         return str(message.from_user.id)
+    
+    async def kill_something():
+        try:
+            process_name = message.text.split(' ')[1]
+            return await controller.find_and_kill(process_name)
+        except (ValueError, IndexError):
+            await message.answer("Неправильное имя процесса")
+            return True
+    
+    async def run_command():
+
+        try:
+            #убираем первое слово '///run_command ' пример '///run_command ls -la' -> 'ls -la'
+            command = message.text.split(' ', 1)[1]
+            return await controller.run_command(command)
+        except (ValueError, IndexError):
+            await message.answer("Неправильная команда")
+            return True
 
     commands = {
         "///перезагрузить": reboot,
@@ -392,7 +410,9 @@ async def gpt_chat(message: types.Message):
         "///сервисы": print_all_services,
         "///убить": kill_telegram,
         "///get_user_id": get_id,
-        "///помощь": help_message
+        "///помощь": help_message,
+        "///kill": kill_something,
+        "///run_command": run_command
     }
 
     command = commands.get(message.text.split(' ')[0])
