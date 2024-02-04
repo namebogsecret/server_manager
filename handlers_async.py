@@ -20,6 +20,15 @@ services = services_string.split(",") if services_string else []
 #     for service in services:
 #         vars()[service] = State()
 
+def all_servers_keyboard():
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    buttons = [
+        InlineKeyboardButton("Сервер 1", callback_data="server1"),
+        InlineKeyboardButton("Сервер 2", callback_data="server2")
+    ]
+    keyboard.add(*buttons)
+    return keyboard
+
 def get_main_menu_keyboard():
     keyboard = InlineKeyboardMarkup(row_width=2)  # Задаем ширину ряда равной 2
 
@@ -32,6 +41,9 @@ def get_main_menu_keyboard():
     ]
 
     keyboard.add(*buttons)  # Добавляем кнопки в клавиатуру
+    keyboard.row(
+        InlineKeyboardButton("Ко всем серверам", callback_data="to_all_servers")
+    )
     return keyboard
 
 def crone_keyboard(cron_jobs):
@@ -137,7 +149,7 @@ def get_service_keyboard(service_name, is_running):
     )
 
     keyboard.row(
-        InlineKeyboardButton("Домой", callback_data="back_to_home")
+        InlineKeyboardButton("Назад к серверу", callback_data="back_to_home")
     )
 
     return keyboard
@@ -157,10 +169,10 @@ async def start_command_handler(message: types.Message):
         await not_allowed(message)
         return
     # Создание клавиатуры
-    keyboard = get_main_menu_keyboard()
+    keyboard = all_servers_keyboard()
     
     # Отправка сообщения с клавиатурой
-    await message.answer("Что делаем?", reply_markup=keyboard)
+    await message.answer("Выберите сервер:", reply_markup=keyboard)
 
 
 async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
@@ -174,6 +186,13 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         await query.message.edit_reply_markup(reply_markup=None)
         keyboard = get_service_choose_keyboard()
         await query.message.answer("Выбери сервис:", reply_markup=keyboard)
+    elif data == "to_all_servers":
+        await query.message.edit_reply_markup(reply_markup=None)
+        keyboard = all_servers_keyboard()
+        await query.message.answer("Выберите сервер:", reply_markup=keyboard)
+    elif data.startswith("server1"):
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.answer("Вы на 1 сервере", reply_markup=get_main_menu_keyboard())
     elif data.startswith("service__"):
         await query.message.edit_reply_markup(reply_markup=None)
         service_name = data.split("__")[1]
@@ -299,6 +318,8 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         await query.message.edit_reply_markup(reply_markup=None)
         #query.message.answer("Вызвана помощь")
         await query.message.answer(await get_help_message_inline(), reply_markup=get_main_menu_keyboard())
+    else:
+        print("got to another server (from server1)")
 
     await query.answer()
 
