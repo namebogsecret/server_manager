@@ -3,8 +3,30 @@ import os
 from dotenv import load_dotenv
 import psutil
 import re
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('server_manager.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class SystemController:
+    # Whitelist разрешенных процессов для убийства
+    ALLOWED_KILL_PROCESSES = [
+        'telegram',
+        'vscode',
+        'code',
+        'chrome',
+        'firefox',
+        'slack'
+    ]
+
     def __init__(self):
         load_dotenv()
         services_string = os.getenv("SERVICES")
@@ -15,14 +37,37 @@ class SystemController:
 
     async def reboot_computer(self):
         """ Перезагружает компьютер. """
-        subprocess.run(["sudo", "reboot"], check=True)
+        try:
+            logger.info("Attempting to reboot computer")
+            subprocess.run(["sudo", "reboot"], check=True, timeout=10)
+        except subprocess.TimeoutExpired:
+            logger.error("Reboot command timed out")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to reboot computer: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during reboot: {e}")
+            raise
 
     async def restart_service_by_name(self, service_name):
         """
         Перезагружает один из трех сервисов.
         :param service_name: Название сервиса.
         """
-        subprocess.run(["sudo", "systemctl", "restart", service_name], check=True)
+        try:
+            logger.info(f"Restarting service: {service_name}")
+            subprocess.run(["sudo", "systemctl", "restart", service_name], check=True, timeout=30)
+            logger.info(f"Successfully restarted service: {service_name}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"Restart of service {service_name} timed out")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to restart service {service_name}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error restarting service {service_name}: {e}")
+            raise
 
     async def restart_service(self, service_number):
         """
@@ -40,8 +85,20 @@ class SystemController:
         Останавливает и отключает один из трех сервисов.
         :param service_name: Название сервиса.
         """
-        subprocess.run(["sudo", "systemctl", "stop", service_name], check=True)
-        subprocess.run(["sudo", "systemctl", "disable", service_name], check=True)
+        try:
+            logger.info(f"Stopping and disabling service: {service_name}")
+            subprocess.run(["sudo", "systemctl", "stop", service_name], check=True, timeout=30)
+            subprocess.run(["sudo", "systemctl", "disable", service_name], check=True, timeout=30)
+            logger.info(f"Successfully stopped and disabled service: {service_name}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"Stop/disable of service {service_name} timed out")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to stop/disable service {service_name}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error stopping/disabling service {service_name}: {e}")
+            raise
 
     async def stop_and_disable_service(self, service_number):
         """
@@ -59,8 +116,20 @@ class SystemController:
         Запускает и включает один из трех сервисов.
         :param service_name: Название сервиса.
         """
-        subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
-        subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
+        try:
+            logger.info(f"Starting and enabling service: {service_name}")
+            subprocess.run(["sudo", "systemctl", "start", service_name], check=True, timeout=30)
+            subprocess.run(["sudo", "systemctl", "enable", service_name], check=True, timeout=30)
+            logger.info(f"Successfully started and enabled service: {service_name}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"Start/enable of service {service_name} timed out")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to start/enable service {service_name}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error starting/enabling service {service_name}: {e}")
+            raise
 
     async def start_and_enable_service(self, service_number):
         """
@@ -105,24 +174,41 @@ class SystemController:
         return up_services
 
     async def find_and_kill(self, pattern):
+        """
+        Убивает процессы по шаблону имени.
+        Только процессы из whitelist могут быть убиты.
+        """
+        # Проверяем, что pattern находится в whitelist
+        if not any(allowed in pattern.lower() for allowed in self.ALLOWED_KILL_PROCESSES):
+            logger.warning(f"Attempt to kill non-whitelisted process: {pattern}")
+            return f"Процесс '{pattern}' не разрешен для убийства. Разрешенные: {', '.join(self.ALLOWED_KILL_PROCESSES)}"
+
         killed = 0
         try:
+            logger.info(f"Attempting to kill processes matching: {pattern}")
             # Находим процессы, соответствующие шаблону
             result = subprocess.run(['pgrep', '-f', pattern], stdout=subprocess.PIPE, text=True)
             pids = result.stdout.strip().split('\n')
 
             for pid in pids:
-                if pid:
+                if pid and pid.isdigit():
+                    # Проверяем, что PID не системный (больше 1000)
+                    if int(pid) < 1000:
+                        logger.warning(f"Skipping system process with PID {pid}")
+                        continue
                     # Убиваем каждый процесс по PID
                     subprocess.run(['kill', pid])
-                    killed +=1
+                    killed += 1
+                    logger.info(f"Killed process with PID {pid}")
+
+            logger.info(f"Killed {killed} processes matching '{pattern}'")
             return str(killed)
         except Exception as e:
+            logger.error(f"Error killing processes matching '{pattern}': {e}")
             return f"Ошибка: {e} Killed {killed}"
 
     async def total_cpu_load(self):
         return psutil.cpu_percent(interval=1, percpu=True)
-        #return psutil.cpu_percent(interval=5)
 
     async def top_cpu(self, n=50):
         # Запускаем команду и получаем вывод
@@ -140,7 +226,6 @@ class SystemController:
         return process_cpu_dict
 
     async def check_memory_usage(self):
-        #free -h
         output = subprocess.check_output(
             ["free", "-h"], text=True
         )
@@ -167,26 +252,9 @@ class SystemController:
     async def check_cpu_load_by_this_services(self):
         services_are_up = await self.check_what_services_are_up()
         cpu_load_by_service = {}
-        #global cpu load
 
         for service in services_are_up:
             try:
-                # # Получение PID'ов процессов, связанных с сервисом
-                # pids = subprocess.check_output(
-                #     ["pidof", service], text=True
-                # ).strip().split()
-
-                # total_cpu_load = 0
-                # for pid in pids:
-                #     # Использование команды ps для получения загрузки ЦПУ каждым PID
-                #     output = subprocess.check_output(
-                #         ["ps", "-p", pid, "-o", "%cpu"], text=True
-                #     )
-                #     # Предполагаем, что вывод содержит заголовок и значение
-                #     cpu_load = float(output.splitlines()[1].strip())
-                #     total_cpu_load += cpu_load
-                
-                # cpu_load_by_service[service] = total_cpu_load
                 # Получение PID'а главного процесса сервиса
                 output = subprocess.check_output(
                     ["systemctl", "show", "-p", "MainPID", service], text=True
@@ -200,8 +268,9 @@ class SystemController:
                     cpu_load = float(cpu_load_output.splitlines()[1].strip())
                     cpu_load_by_service[service] = cpu_load
             except subprocess.CalledProcessError as er:
-                print(er)
-                pass
+                logger.error(f"Failed to get CPU load for service {service}: {er}")
+            except Exception as er:
+                logger.error(f"Unexpected error getting CPU load for service {service}: {er}")
             
 
         return cpu_load_by_service
@@ -222,7 +291,6 @@ class SystemController:
             if line.strip():
                 active = False if line.strip().startswith("#") else True
                 command_part = line.strip().split()[-1].split('/')[-1]
-                #print(f"{status}: {command_part}")
                 dict_cron_jobs[command_part] = active
         return dict_cron_jobs
 
@@ -245,15 +313,3 @@ class SystemController:
             modified_lines.append(line)
 
         await self._write_new_crontab('\n'.join(modified_lines)+"\n")
-
-    async def run_command(self, command):
-        """ Запускает команду в терминале """
-        try:
-            output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode()
-            return output
-        except subprocess.CalledProcessError as e:
-            return e.output.decode()
-# Пример использования:
-#controller = SystemController()
-# controller.reboot_computer()  # Раскомментируйте для перезагрузки компьютера
-# controller.restart_service(0)  # Перезагружает первый сервис

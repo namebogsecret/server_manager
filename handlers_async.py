@@ -1,7 +1,6 @@
 from aiogram import types
 from system_controller import SystemController
 from df import get_disk_usage_percent
-#from aiogram.dispatcher.filters.state import State, StatesGroup
 import os
 from dotenv import load_dotenv
 from aiogram.dispatcher import FSMContext
@@ -13,12 +12,6 @@ users_string = os.getenv("USERS")
 ALLOWED_USERS = users_string.split(",") if users_string else []
 services_string = os.getenv("SERVICES")
 services = services_string.split(",") if services_string else []
-# class BotStates(StatesGroup):
-#     home = State()
-#     service_management = State()
-#     # Динамически создаем состояния для каждого сервиса
-#     for service in services:
-#         vars()[service] = State()
 
 def all_servers_keyboard():
     keyboard = InlineKeyboardMarkup(row_width=2)
@@ -36,7 +29,7 @@ def get_main_menu_keyboard():
         InlineKeyboardButton("Статистика", callback_data="statistica"),
         InlineKeyboardButton("Управление сервисами", callback_data="service_management"),
         InlineKeyboardButton("Убить процессы", callback_data="kill"),
-        InlineKeyboardButton("Crone", callback_data="crone"),
+        InlineKeyboardButton("Cron", callback_data="cron"),
         InlineKeyboardButton("Помощь", callback_data="help")
     ]
 
@@ -46,24 +39,16 @@ def get_main_menu_keyboard():
     )
     return keyboard
 
-def crone_keyboard(cron_jobs):
+def cron_keyboard(cron_jobs):
     keyboard = InlineKeyboardMarkup(row_width=2)  # Задаем ширину ряда равной 2
-    # buttons= [
-    # for index, kej, status in enumerate(cron_jobs, start=1):
-
-    #     InlineKeyboardButton(f"{index}. {kej} - {status}", callback_data=f"crone__{kej}")
-        
-    # ]
     buttons = []
     for kej, active in cron_jobs.items():
         status = "✅" if active else "❌"
-        buttons.append(InlineKeyboardButton(f"{status} {kej}", callback_data=f"crone-{kej}"))
+        buttons.append(InlineKeyboardButton(f"{status} {kej}", callback_data=f"cron-{kej}"))
     keyboard.add(*buttons)
     keyboard.row(
         InlineKeyboardButton("Назад", callback_data="back_to_home")
     )
-
-    #keyboard.add(*buttons)  # Добавляем кнопки в клавиатуру
     return keyboard
 
 def statistica_keyboard():
@@ -94,10 +79,8 @@ def killing_processes_keyboard():
     return keyboard
 
 def get_service_choose_keyboard():
-
     keyboard = InlineKeyboardMarkup(row_width=2)  # Устанавливаем ширину ряда равной 2
     keyboard.row(
-        #InlineKeyboardButton("Список всех сервисов", callback_data="services"),
         InlineKeyboardButton("Запущенные сервисы", callback_data="services_up")
     )
     # Добавляем кнопки для сервисов парами
@@ -159,12 +142,6 @@ def is_list(obj):
     return isinstance(obj, list)
 
 async def start_command_handler(message: types.Message):
-    # если нужно будет удалить клавиатуру
-    # keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    # # Добавляем кнопку с текстом /start
-    # keyboard.add(types.KeyboardButton("/start"))
-    # await message.answer("Нажмите на кнопку, чтобы начать", reply_markup=keyboard)
-    #await message.answer("Клавиатура удалена.", reply_markup=types.ReplyKeyboardRemove())
     if str(message.from_user.id) not in ALLOWED_USERS:
         await not_allowed(message)
         return
@@ -181,7 +158,6 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         return
     controller = SystemController()
     data = query.data
-    #get_main_menu_keyboard()
     if data.startswith("service_management"):
         await query.message.edit_reply_markup(reply_markup=None)
         keyboard = get_service_choose_keyboard()
@@ -247,8 +223,6 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
         await query.message.edit_reply_markup(reply_markup=None)
         await query.message.answer("Перезагрузка...", reply_markup=get_main_menu_keyboard())
         controller.reboot_computer()
-    # elif data == "status":
-    #     pass
 
     elif data == "kill":
         await query.message.edit_reply_markup(reply_markup=None)
@@ -268,18 +242,18 @@ async def callback_query_handler(query: types.CallbackQuery, state: FSMContext):
 
         await query.message.answer(f"Загрузка памяти:\n{result}\n{top_mem}", reply_markup=statistica_keyboard())
 
-    elif data == "crone":
+    elif data == "cron":
         await query.message.edit_reply_markup(reply_markup=None)
         cron_jobs = await controller.list_cron_jobs()
-        keyboard = crone_keyboard(cron_jobs)
+        keyboard = cron_keyboard(cron_jobs)
         await query.message.answer("Cron. Нажмите что бы включить/выключить", reply_markup=keyboard)
 
-    elif data.startswith("crone-"):
+    elif data.startswith("cron-"):
         await query.message.edit_reply_markup(reply_markup=None)
         cron_job = data.split("-")[1]
         await controller.modify_cron_line(cron_job)
         cron_jobs = await controller.list_cron_jobs()
-        keyboard = crone_keyboard(cron_jobs)
+        keyboard = cron_keyboard(cron_jobs)
         await query.message.answer("Cron. Нажмите что бы включить/выключить", reply_markup=keyboard)
 
     elif data == "kill_vscode":
@@ -409,16 +383,6 @@ async def gpt_chat(message: types.Message):
         except (ValueError, IndexError):
             await message.answer("Неправильное имя процесса")
             return True
-    
-    async def run_command():
-
-        try:
-            #убираем первое слово '///run_command ' пример '///run_command ls -la' -> 'ls -la'
-            command = message.text.split(' ', 1)[1]
-            return await controller.run_command(command)
-        except (ValueError, IndexError):
-            await message.answer("Неправильная команда")
-            return True
 
     commands = {
         "///перезагрузить": reboot,
@@ -432,8 +396,7 @@ async def gpt_chat(message: types.Message):
         "///убить": kill_telegram,
         "///get_user_id": get_id,
         "///помощь": help_message,
-        "///kill": kill_something,
-        "///run_command": run_command
+        "///kill": kill_something
     }
 
     command = commands.get(message.text.split(' ')[0])
@@ -477,12 +440,15 @@ async def get_help_message_inline():
             "9. Показывать это сообщение\n"    
     )
 async def not_allowed(message: types.Message):
-    with open("/root/myservermanager/not_allowed.txt", "a") as f:
-        f.write(f"{message.from_user.id}: {message.text}\n")
+    try:
+        with open("not_allowed.txt", "a") as f:
+            f.write(f"{message.from_user.id}: {message.text}\n")
+    except IOError as e:
+        print(f"Error writing to not_allowed.txt: {e}")
     await message.answer(f"Вы не имеете доступа к этому боту")
 
 async def voice_to_text(message: types.Message):
-    if message.from_user.id not in ALLOWED_USERS:
+    if str(message.from_user.id) not in ALLOWED_USERS:
         await not_allowed(message)
         return
     await message.answer("Пока не реализовано")

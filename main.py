@@ -10,24 +10,17 @@ sys.path.append(src_path)
 import asyncio
 import nest_asyncio
 from handlers_async import  gpt_chat, voice_to_text, callback_query_handler, service_management_handler, start_command_handler
-
-from aiogram import Bot, Dispatcher #, types
-
-#from aiogram.types import ParseMode
-#from aiogram.utils import executor
+from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
-load_dotenv()
+from utils import set_affinity
 
+load_dotenv()
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 nest_asyncio.apply()
 
-def set_affinity(cores):
-    """ Устанавливает аффинность (привязку) процесса к определенным ядрам. """
-    pid = os.getpid()
-    os.sched_setaffinity(pid, cores)
-    print("done")
+# Привязываем процесс к ядру 1 для оптимизации производительности
 set_affinity([1])
 
 async def my_telegram_bot() -> None:
@@ -38,14 +31,11 @@ async def my_telegram_bot() -> None:
     # Регистрация обработчика команды /start
     dp.register_message_handler(start_command_handler, commands=["start"])
 
-
-    # Register your async handlers here, for example:
+    # Register your async handlers here
     dp.register_message_handler(gpt_chat, content_types=['text'])
     dp.register_message_handler(voice_to_text, content_types=['voice'])
     dp.register_callback_query_handler(callback_query_handler)
-    #dp.register_message_handler(service_management_handler, state=BotStates.service_management)
 
-    
     try:
         await dp.start_polling()
     finally:

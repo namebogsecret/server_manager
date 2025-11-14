@@ -1,15 +1,6 @@
 import os
 import multiprocessing
-import os
-
-def set_affinity(cores):
-    """ Устанавливает аффинность (привязку) процесса к определенным ядрам. """
-    pid = os.getpid()
-    os.sched_setaffinity(pid, cores)
-    print("done")
-
-pid = os.getpid()  # Получаем PID текущего процесса
-set_affinity(pid, [1])  # Привязываем процесс к первому ядру
+from utils import set_affinity
 
 def get_cpu_count():
     """ Возвращает общее количество ядер процессора. """
@@ -25,10 +16,9 @@ def get_cpu_count():
         else:
             raise Exception("Не удалось определить количество ядер CPU")
 
-  # Получаем PID текущего процесса
-set_affinity([1])  # Привязываем процесс к первому ядру
-print(pid)
-print(1)
-# Пример использования
-cpu_count = get_cpu_count()
-print(f"Общее количество ядер CPU: {cpu_count}")
+if __name__ == '__main__':
+    # Пример использования
+    set_affinity([1])  # Привязываем процесс к первому ядру
+    cpu_count = get_cpu_count()
+    print(f"PID: {os.getpid()}")
+    print(f"Общее количество ядер CPU: {cpu_count}")
